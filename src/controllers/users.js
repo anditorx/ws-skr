@@ -5,11 +5,16 @@ const Validator = require("fastest-validator");
 const val_ = new Validator();
 const { Users } = require("../models");
 const CryptoEncrypt = require("../utils/crypto");
+const { userPutValidation } = require("../validation/Users");
 
 /* GET users listing. */
-exports.getAllUsers = (req, res, next) => {
-  const helloWorld = CryptoEncrypt.encrypt("Password1!");
-  res.send(helloWorld);
+exports.getAllUsers = async (req, res, next) => {
+  const data = await Users.findAll();
+  return res.json({
+    status: 200,
+    message: "Success get all data user",
+    data,
+  });
 };
 
 // POST
@@ -54,23 +59,17 @@ exports.postUser = async (req, res, next) => {
 // PUT
 exports.putUser = async (req, res, next) => {
   const id = req.params.id;
-  let userPut = await Users.findByPk(id);
+  const { error } = userPutValidation(req.body);
+  if (error) return res.status(400).send(error.details[0].message);
+  // check if the user is already in the database
+  let userFromDB = await Users.findOne({ where: { id: id } });
+  if (!userFromDB) return res.status(400).send("User tidak ditemukan");
 
-  if (!userPut) {
-    return res.status(404).json({
-      status: 404,
-      message: "User tidak ditemukan",
-    });
-  }
-
-  // validation
-  const schema = {
-    fullName: "string|optional",
-    email: "string|optional",
-    username: "string|optional",
-    password: "string|optional",
-    role: "string|optional",
-  };
+  const validPass = await bcrypt.compare(
+    req.body.password,
+    userFromDB.password
+  );
+  if (!validPass) return res.status(400).send("Invalid password");
 
   // hash passwords
   const salt = await bcrypt.genSalt(10);
@@ -79,21 +78,40 @@ exports.putUser = async (req, res, next) => {
   const user = {
     fullName: req.body.fullName,
     email: req.body.email,
-    username: req.body.username,
     password: hashPassword,
-    role: req.body.role ? req.body.role : "admin-client",
+    username: req.body.username,
   };
-
-  const validate = val_.validate(user, schema);
-
-  if (validate.length) {
-    return res.status(400).json(validate);
-  }
   // update data
-  userPut = await Users.update(user);
+  userFromDB = await Users.update(user, { where: { id: id } });
+
   res.json({
     status: 200,
     message: "Berhasil merubah data user",
-    data: userUpdate,
+    data: user,
+  });
+};
+
+exports.getUserById = async (req, res, next) => {
+  const id = req.params.id;
+  let userFromDB = await Users.findOne({ where: { id: id } });
+  if (!userFromDB) return res.status(404).send("User tidak ditemukan");
+
+  return res.json({
+    status: 200,
+    message: "Success get user by id",
+    userFromDB,
+  });
+};
+
+exports.deleteUser = async (req, res, next) => {
+  const id = req.params.id;
+  let userFromDB = await Users.findByPk(id);
+  if (!userFromDB) return res.status(404).send("User tidak ditemukan");
+
+  userFromDB = await Users.destroy({ where: { id: id } });
+
+  return res.json({
+    status: 200,
+    message: "Success delete user",
   });
 };

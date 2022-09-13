@@ -20,7 +20,6 @@ exports.getAllData = async (req, res, next) => {
     var sql =
       "SELECT * FROM organizations INNER JOIN users ON organizations.pic = users.id";
     db.query(sql, (err, result) => {
-      console.log(result);
       return res.json({
         status: 200,
         message: "Success get all data user",
